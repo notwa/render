@@ -1,33 +1,22 @@
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
+#!/usr/bin/env python3
 
-from __future__ import division
-from __future__ import print_function
-
-import cairo
-from cairo import OPERATOR_SOURCE
-
-from numpy import arctan2
-from numpy import array
-from numpy import column_stack
-from numpy import cos
-from numpy import linspace
-from numpy import pi
-from numpy import sin
-from numpy import sqrt
-from numpy import square
+import numpy as np
 from numpy.random import random
 
+import cairo
 
-TWOPI = pi*2
+import gi
+gi.require_version('Gtk','3.0')
+from gi.repository import Gtk
 
+tau = np.pi * 2
 
 class Render(object):
 
-  def __init__(self,n, back, front):
+  def __init__(self,n=512,fg=[0,0,0,1],bg=[1,1,1,1]):
     self.n = n
-    self.front = front
-    self.back = back
+    self.fg = fg
+    self.bg = bg
     self.pix = 1./float(n)
 
     self.num_img = 0
@@ -47,23 +36,23 @@ class Render(object):
   def clear_canvas(self):
     ctx = self.ctx
 
-    ctx.set_source_rgba(*self.back)
+    ctx.set_source_rgba(*self.bg)
     ctx.rectangle(0,0,1,1)
     ctx.fill()
-    ctx.set_source_rgba(*self.front)
+    ctx.set_source_rgba(*self.fg)
 
   def write_to_png(self,fn):
     self.sur.write_to_png(fn)
     self.num_img += 1
 
-  def set_front(self, c):
-    self.front = c
+  def set_fg(self,c):
+    self.fg = c
     self.ctx.set_source_rgba(*c)
 
-  def set_back(self, c):
-    self.back = c
+  def set_bg(self,c):
+    self.bg = c
 
-  def set_line_width(self, w):
+  def set_line_width(self,w):
     self.line_width = w
     self.ctx.set_line_width(w)
 
@@ -90,11 +79,11 @@ class Render(object):
     rectangle = self.ctx.rectangle
     fill = self.ctx.fill
 
-    v1 = array((x2-x1, y2-y1))
-    v2 = array((x3-x1, y3-y1))
+    v1 = np.array((x2-x1,y2-y1))
+    v2 = np.array((x3-x1,y3-y1))
 
-    a1 = random((grains, 1))
-    a2 = random((grains, 1))
+    a1 = random((grains,1))
+    a2 = random((grains,1))
 
     dd = v1*a1 + v2*a2
 
@@ -110,16 +99,16 @@ class Render(object):
     rectangle = self.ctx.rectangle
     fill = self.ctx.fill
 
-    v1 = array((x2-x1, y2-y1))
-    v2 = array((x3-x1, y3-y1))
+    v1 = np.array((x2-x1,y2-y1))
+    v2 = np.array((x3-x1,y3-y1))
 
-    a1 = random((2*grains, 1))
-    a2 = random((2*grains, 1))
+    a1 = random((2*grains,1))
+    a2 = random((2*grains,1))
 
     mask = ((a1+a2)<1).flatten()
 
-    ## discarding half the grains because i am too tired to figure out how to
-    ## map the parallelogram to the triangle
+    # discarding half the grains because i am too tired to figure out how to
+    # map the parallelogram to the triangle
 
     dd = v1*a1 + v2*a2
 
@@ -130,6 +119,21 @@ class Render(object):
       rectangle(x,y,pix,pix)
       fill()
 
+  def dot(self,x,y):
+    ctx = self.ctx
+    pix = self.pix
+    ctx.rectangle(x,y,pix,pix)
+    ctx.fill()
+
+  def circle(self,x,y,r,fill=False):
+    ctx = self.ctx
+
+    ctx.arc(x,y,r,0,tau)
+    if fill:
+      ctx.fill()
+    else:
+      ctx.stroke()
+
   def random_circle(self,x1,y1,r,grains):
     """
     random points in circle. nonuniform distribution.
@@ -138,11 +142,11 @@ class Render(object):
     rectangle = self.ctx.rectangle
     fill = self.ctx.fill
 
-    the = random(grains)*pi*2
+    the = random(grains)*np.pi*2
     rad = random(grains)*r
 
-    xx = x1 + cos(the)*rad
-    yy = y1 + sin(the)*rad
+    xx = x1 + np.cos(the)*rad
+    yy = y1 + np.sin(the)*rad
 
     for x,y in zip(xx,yy):
       rectangle(x,y,pix,pix)
@@ -159,36 +163,21 @@ class Render(object):
       rectangle(x,y,pix,pix)
       fill()
 
-  def dot(self,x,y):
-    ctx = self.ctx
-    pix = self.pix
-    ctx.rectangle(x,y,pix,pix)
-    ctx.fill()
-
-  def circle(self,x,y,r,fill=False):
-    ctx = self.ctx
-
-    ctx.arc(x,y,r,0,TWOPI)
-    if fill:
-      ctx.fill()
-    else:
-      ctx.stroke()
-
   def transparent_pix(self):
     op = self.ctx.get_operator()
-    self.ctx.set_operator(OPERATOR_SOURCE)
+    self.ctx.set_operator(cairo.OPERATOR_SOURCE)
     self.ctx.set_source_rgba(*[1,1,1,0.95])
     self.dot(1-self.pix,1.0-self.pix)
     self.ctx.set_operator(op)
 
-  def path(self, xy):
+  def path(self,xy):
     ctx = self.ctx
     ctx.move_to(*xy[0,:])
     for x in xy:
       ctx.line_to(*x)
     ctx.stroke()
 
-  def closed_path(self, coords, fill=True):
+  def closed_path(self,coords,fill=True):
     ctx = self.ctx
     line_to = ctx.line_to
 
@@ -205,10 +194,10 @@ class Render(object):
     else:
       ctx.stroke()
 
-  def circle_path(self, coords, r, fill=False):
+  def circle_path(self,coords,r,fill=False):
     ctx = self.ctx
     for x,y in coords:
-      ctx.arc(x,y,r,0,TWOPI)
+      ctx.arc(x,y,r,0,tau)
       if fill:
         ctx.fill()
       else:
@@ -220,20 +209,20 @@ class Render(object):
 
     dx = x1-x2
     dy = y1-y2
-    dd = sqrt(dx*dx+dy*dy)
+    dd = np.sqrt(dx*dx+dy*dy)
 
     n = int(dd/self.pix)
     n = n if n>nmin else nmin
 
-    a = arctan2(dy,dx)
+    a = np.arctan2(dy,dx)
 
-    scale = linspace(0,dd,n)
+    scale = np.linspace(0,dd,n)
 
-    xp = x1-scale*cos(a)
-    yp = y1-scale*sin(a)
+    xp = x1-scale*np.cos(a)
+    yp = y1-scale*np.sin(a)
 
     for x,y in zip(xp,yp):
-      arc(x,y,r,0,pi*2.)
+      arc(x,y,r,0,np.pi*2.)
       fill()
 
   def sandstroke_orthogonal(self,xys,height=None,steps=10,grains=10):
@@ -247,12 +236,12 @@ class Render(object):
     dx = xys[:,2] - xys[:,0]
     dy = xys[:,3] - xys[:,1]
 
-    aa = arctan2(dy,dx)
-    directions = column_stack([cos(aa),sin(aa)])
-    dd = sqrt(square(dx)+square(dy))
+    aa = np.arctan2(dy,dx)
+    directions = np.column_stack([np.cos(aa),np.sin(aa)])
+    dd = np.sqrt(np.square(dx)+np.square(dy))
 
-    aa_orth = aa + pi*0.5
-    directions_orth = column_stack([cos(aa_orth),sin(aa_orth)])
+    aa_orth = aa + np.pi*0.5
+    directions_orth = np.column_stack([np.cos(aa_orth),np.sin(aa_orth)])
 
     for i,d in enumerate(dd):
 
@@ -274,13 +263,13 @@ class Render(object):
     dx = xys[:,2] - xys[:,0]
     dy = xys[:,3] - xys[:,1]
 
-    aa = arctan2(dy,dx)
-    directions = column_stack([cos(aa),sin(aa)])
+    aa = np.arctan2(dy,dx)
+    directions = np.column_stack([np.cos(aa),np.sin(aa)])
 
-    dd = sqrt(square(dx)+square(dy))
+    dd = np.sqrt(np.square(dx)+np.square(dy))
 
     for i,d in enumerate(dd):
-      rnd = sqrt(random((grains,1)))
+      rnd = np.sqrt(random((grains,1)))
       if left:
         rnd = 1.0-rnd
 
@@ -296,90 +285,77 @@ class Render(object):
     dx = xys[:,2] - xys[:,0]
     dy = xys[:,3] - xys[:,1]
 
-    aa = arctan2(dy,dx)
-    directions = column_stack([cos(aa),sin(aa)])
+    aa = np.arctan2(dy,dx)
+    directions = np.column_stack([np.cos(aa),np.sin(aa)])
 
-    dd = sqrt(square(dx)+square(dy))
+    dd = np.sqrt(np.square(dx)+np.square(dy))
 
     for i,d in enumerate(dd):
       for x,y in xys[i,:2] + directions[i,:]*random((grains,1))*d:
         rectangle(x,y,pix,pix)
         fill()
 
-  def set_front_from_colors(self, i, a=1):
-    ii = i%self.ncolors
-
-    r,g,b = self.colors[ii]
-    c = [r,g,b,a]
-
-    self.front = c
-    self.ctx.set_source_rgba(*c)
-
-  def get_colors_from_file(self, fn):
-    import Image
-    from numpy.random import shuffle
-
-    def p(f):
-      return float('{:0.5f}'.format(f))
-
-    scale = 1./255.
-    im = Image.open(fn)
-    w,h = im.size
-    rgbim = im.convert('RGB')
-    res = []
-    for i in xrange(0,w):
-      for j in xrange(0,h):
-        r,g,b = rgbim.getpixel((i,j))
-        res.append([p(r*scale),p(g*scale),p(b*scale)])
-
-    shuffle(res)
-
-    self.colors = res
-    self.ncolors = len(res)
-
-
 class Animate(Render):
 
-  def __init__(self, n, front ,back, step):
-    import gtk, gobject
+  def __init__(self,callback,*args,vsync=False,**kwargs):
+    super().__init__(*args,**kwargs)
 
-    Render.__init__(self, n, front, back)
+    self.steps = 0
 
-    window = gtk.Window()
+    window = Gtk.Window()
     self.window = window
-    window.resize(self.n, self.n)
 
-    self.step = step
+    window.set_title("Animate")
+    window.set_default_size(self.n,self.n)
+    window.connect('delete-event',Gtk.main_quit)
 
-    window.connect("destroy", self.__destroy)
-    darea = gtk.DrawingArea()
-    darea.connect("expose-event", self.expose)
+    self.callback = callback
+
+    darea = Gtk.DrawingArea()
     self.darea = darea
+
+    darea.connect("draw",self._draw)
 
     window.add(darea)
     window.show_all()
 
-    #self.cr = self.darea.window.cairo_create()
-    self.steps = 0
-    gobject.idle_add(self.step_wrap)
+    if vsync:
+        window.add_tick_callback(self.update)
+    else:
+        from gi.repository import GLib
+        GLib.idle_add(self.update)
+
+    Gtk.main() # NOTE: formerly in self.start()
 
   def __destroy(self,*args):
-    import gtk
-    gtk.main_quit(*args)
+    print("(DEBUG)","destroy called with",args)
+    Gtk.main_quit(*args)
 
-  def start(self):
-    import gtk
-    gtk.main()
-
-  def expose(self,*args):
-    cr = self.darea.window.cairo_create()
+  def _draw(self,widget,cr):
     cr.set_source_surface(self.sur,0,0)
     cr.paint()
 
-  def step_wrap(self):
-    res = self.step(self)
+  def update(self,*args):
+    res = self.callback(self)
     self.steps += 1
-    self.expose()
-
+    self.darea.queue_draw()
     return res
 
+if __name__ == '__main__':
+    stop = 5e3
+    def draw(anim):
+        t = anim.steps/stop
+
+        if t >= 1:
+            return False # stop drawing
+
+        if t == 0:
+            anim.set_line_width(anim.pix)
+            anim.line(0.0,0.0,1.0,1.0)
+            anim.line(0.5,0.5,1.0,0.5)
+
+        anim.random_circle(t,1-t,0.25,16)
+
+        return True # keep drawing
+
+    Animate(draw)
